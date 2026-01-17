@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hexatic Toy Model (Double-BKT) on a Triangular Lattice</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header { padding: 12px 14px; border-bottom: 1px solid rgba(127,127,127,.35); }
+    .wrap { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 12px 14px; max-width: 1100px; margin: 0 auto; }
+    @media (min-width: 980px) { .wrap { grid-template-columns: 2fr 1fr; align-items: start; } }
+    .card { border: 1px solid rgba(127,127,127,.35); border-radius: 12px; padding: 12px; }
+    canvas { width: 100%; height: auto; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.08); }
+    label { display: grid; grid-template-columns: 120px 1fr 64px; gap: 10px; align-items: center; font-size: 14px; margin: 10px 0; }
+    input[type="range"] { width: 100%; }
+    button { font-size: 14px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.12); cursor: pointer; }
+    button:active { transform: translateY(1px); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .stats { font-variant-numeric: tabular-nums; font-size: 13px; line-height: 1.5; }
+    .muted { opacity: .8; font-size: 12px; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(127,127,127,.35); }
+    .legend { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:12px; opacity:.85; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="max-width:1100px;margin:0 auto;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;">
+        <div style="font-weight:650;">Hexatic Toy Model: Double-BKT on a Triangular Lattice (Canvas, no WebGL)</div>
+        <div class="muted">Two coupled XY fields θ (bond-orientational) and φ (positional phase proxy)</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <canvas id="view" width="900" height="700"></canvas>
+      <div class="legend">
+        <span class="pill">Left: θ colors (bond angle)</span>
+        <span class="pill">Right: φ colors (positional phase proxy)</span>
+        <span class="pill">Dots: lattice sites</span>
+      </div>
+      <div class="muted" style="margin-top:10px;">
+        Tip: For a clear two-stage story, choose <b>Kφ &gt; Kθ</b> and moderate coupling <b>g</b>. Then sweep T upward:
+        positional order (φ) tends to melt first, while bond order (θ) can persist (hexatic window).
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:650;margin-bottom:6px;">Controls</div>
+
+      <label>
+        <span>Temperature T</span>
+        <input id="T" type="range" min="0.05" max="2.50" step="0.01" value="0.85"/>
+        <span id="TVal">0.85</span>
+      </label>
+
+      <label>
+        <span>Kθ (orient.)</span>
+        <input id="Ktheta" type="range" min="0.10" max="3.50" step="0.05" value="1.20"/>
+        <span id="KthetaVal">1.20</span>
+      </label>
+
+      <label>
+        <span>Kφ (positional)</span>
+        <input id="Kphi" type="range" min="0.10" max="3.50" step="0.05" value="2.20"/>
+        <span id="KphiVal">2.20</span>
+      </label>
+
+      <label>
+        <span>g (6-lock)</span>
+        <input id="g" type="range" min="0.00" max="2.50" step="0.02" value="0.60"/>
+        <span id="gVal">0.60</span>
+      </label>
+
+      <label>
+        <span>Lattice size</span>
+        <input id="N" type="range" min="24" max="96" step="4" value="56"/>
+        <span id="NVal">56</span>
+      </label>
+
+      <label>
+        <span>MC sweeps/frame</span>
+        <input id="sweeps" type="range" min="1" max="40" step="1" value="10"/>
+        <span id="sweepsVal">10</span>
+      </label>
+
+      <label>
+        <span>Proposal Δ</span>
+        <input id="delta" type="range" min="0.05" max="1.50" step="0.01" value="0.55"/>
+        <span id="deltaVal">0.55</span>
+      </label>
+
+      <div class="row">
+        <button id="toggle">Pause</button>
+        <button id="randomize">Randomize</button>
+        <button id="anneal">Anneal (slow cool)</button>
+      </div>
+
+      <div style="font-weight:650;margin:12px 0 6px;">Readouts</div>
+      <div class="stats" id="stats"></div>
+
+      <div class="muted" style="margin-top:10px;">
+        What this is: a <b>pedagogical</b> “double-BKT” lattice field model on a triangular lattice.
+        For full KTHNY realism (dislocations from elastic degrees of freedom), you’d promote φ to a 2-component displacement field
+        and track disclinations/dislocations geometrically; this toy captures the <b>two order parameters</b> and <b>two defect unbindings</b>
+        in a way that runs well on phones.
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------- Utilities ----------
+  const TAU = Math.PI * 2;
+  function wrapPi(x) {
+    // wrap to (-pi, pi]
+    x = (x + Math.PI) % (TAU);
+    if (x < 0) x += TAU;
+    return x - Math.PI;
+  }
+  function randAngle() { return (Math.random() * TAU) - Math.PI; }
+
+  // HSV -> RGB (0..1) then to css
+  function hsvToRgb(h, s, v) {
+    h = ((h % 1) + 1) % 1;
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = v * (1 - s);
+    const q = v * (1 - f * s);
+    const t = v * (1 - (1 - f) * s);
+    let r, g, b;
+    switch (i % 6) {
+      case 0: r=v; g=t; b=p; break;
+      case 1: r=q; g=v; b=p; break;
+      case 2: r=p; g=v; b=t; break;
+      case 3: r=p; g=q; b=v; break;
+      case 4: r=t; g=p; b=v; break;
+      case 5: r=v; g=p; b=q; break;
+    }
+    return [r,g,b];
+  }
+  function rgbCss(r,g,b,a=1) {
+    return `rgba(${(r*255)|0},${(g*255)|0},${(b*255)|0},${a})`;
+  }
+  function angleToColor(a, sat=0.95, val=0.98) {
+    // map angle (-pi..pi] -> hue (0..1)
+    const h = (a + Math.PI) / TAU;
+    const [r,g,b] = hsvToRgb(h, sat, val);
+    return rgbCss(r,g,b,1);
+  }
+
+  // ---------- Triangular lattice indexing ----------
+  // Use axial-like coords on a rhombus: (x,y), periodic boundaries.
+  // 6 neighbors in (x,y):
+  // (x+1,y), (x-1,y), (x,y+1), (x,y-1), (x+1,y-1), (x-1,y+1)
+  function idx(x,y,N) {
+    x = (x % N + N) % N;
+    y = (y % N + N) % N;
+    return y*N + x;
+  }
+  const neighD = [
+    [ 1, 0],
+    [-1, 0],
+    [ 0, 1],
+    [ 0,-1],
+    [ 1,-1],
+    [-1, 1],
+  ];
+
+  // For vortex (plaquette winding), use two elementary triangles per cell in this coordinate system:
+  // Up-triangle: (x,y), (x+1,y), (x,y+1)
+  // Down-triangle: (x+1,y), (x+1,y-1), (x,y)
+  function triangleWinding(field, N, a, b, c) {
+    const ab = wrapPi(field[b] - field[a]);
+    const bc = wrapPi(field[c] - field[b]);
+    const ca = wrapPi(field[a] - field[c]);
+    const sum = ab + bc + ca;
+    // Vortex charge approx = round(sum / 2pi)
+    return Math.round(sum / TAU);
+  }
+
+  // ---------- Model ----------
+  // Energy:
+  // E = -Kθ Σ_<ij> cos(θi - θj)  - Kφ Σ_<ij> cos(φi - φj)  - g Σ_i cos(6θi - φi)
+  // Metropolis updates at temperature T.
+  class HexaticToy {
+    constructor(N) {
+      this.N = N;
+      this.S = N*N;
+      this.theta = new Float64Array(this.S);
+      this.phi   = new Float64Array(this.S);
+      this.randomize();
+    }
+    randomize() {
+      for (let i=0;i<this.S;i++) {
+        this.theta[i] = randAngle();
+        this.phi[i]   = randAngle();
+      }
+    }
+    localEnergy(i, Kt, Kp, g) {
+      // compute energy contributions involving site i (count each neighbor once here)
+      // We'll use it for deltaE by comparing before/after; neighbor edges are symmetric but cancel in delta.
+      const N = this.N;
+      const x = i % N;
+      const y = (i / N) | 0;
+      let E = 0;
+      const ti = this.theta[i];
+      const pi = this.phi[i];
+      for (const [dx,dy] of neighD) {
+        const j = idx(x+dx, y+dy, N);
+        E += -Kt * Math.cos(ti - this.theta[j]);
+        E += -Kp * Math.cos(pi - this.phi[j]);
+      }
+      E += -g * Math.cos(6*ti - pi);
+      return E;
+    }
+    sweep(T, Kt, Kp, g, delta) {
+      // One sweep ~ S attempted updates (random sites).
+      const S = this.S;
+      for (let n=0;n<S;n++) {
+        const i = (Math.random() * S) | 0;
+
+        // Propose joint update with independent perturbations
+        const oldT = this.theta[i];
+        const oldP = this.phi[i];
+
+        const dT = (Math.random()*2 - 1) * delta;
+        const dP = (Math.random()*2 - 1) * delta;
+
+        const E0 = this.localEnergy(i, Kt, Kp, g);
+
+        this.theta[i] = wrapPi(oldT + dT);
+        this.phi[i]   = wrapPi(oldP + dP);
+
+        const E1 = this.localEnergy(i, Kt, Kp, g);
+        const dE = E1 - E0;
+
+        if (dE <= 0) continue;
+        const r = Math.random();
+        if (r >= Math.exp(-dE / T)) {
+          // reject
+          this.theta[i] = oldT;
+          this.phi[i]   = oldP;
+        }
+      }
+    }
+
+    measures() {
+      // order parameters and vortex densities
+      // psi6 = <exp(i6 theta)>, psiT = <exp(i phi)>
+      let re6=0, im6=0, reT=0, imT=0;
+      const S = this.S;
+      for (let i=0;i<S;i++) {
+        const a = 6*this.theta[i];
+        re6 += Math.cos(a); im6 += Math.sin(a);
+        const p = this.phi[i];
+        reT += Math.cos(p); imT += Math.sin(p);
+      }
+      re6/=S; im6/=S; reT/=S; imT/=S;
+      const psi6 = Math.hypot(re6, im6);
+      const psiT = Math.hypot(reT, imT);
+
+      // vortex density (count |q| on triangles / number of triangles)
+      const N = this.N;
+      let vT=0, vP=0;
+      let triCount = 0;
+
+      for (let y=0;y<N;y++) {
+        for (let x=0;x<N;x++) {
+          // Up triangle: (x,y), (x+1,y), (x,y+1)
+          const a = idx(x,y,N);
+          const b = idx(x+1,y,N);
+          const c = idx(x,y+1,N);
+          vT += Math.abs(triangleWinding(this.theta, N, a,b,c));
+          vP += Math.abs(triangleWinding(this.phi,   N, a,b,c));
+          triCount++;
+
+          // Down triangle: (x+1,y), (x+1,y-1), (x,y)
+          const d = idx(x+1,y,N);
+          const e = idx(x+1,y-1,N);
+          const f = idx(x,y,N);
+          vT += Math.abs(triangleWinding(this.theta, N, d,e,f));
+          vP += Math.abs(triangleWinding(this.phi,   N, d,e,f));
+          triCount++;
+        }
+      }
+      const rhoVT = vT / triCount;
+      const rhoVP = vP / triCount;
+
+      return { psi6, psiT, rhoVT, rhoVP };
+    }
+  }
+
+  // ---------- Rendering ----------
+  const canvas = document.getElementById('view');
+  const ctx = canvas.getContext('2d', { alpha: true });
+
+  function resizeCanvasToDisplaySize() {
+    // Keep internal resolution moderate for phones; scale with DPR but cap.
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(320, Math.floor(rect.width * dpr));
+    const h = Math.max(240, Math.floor(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+    }
+  }
+
+  function latticeToScreen(x, y, N, halfW, pad, scale) {
+    // triangular lattice embedding:
+    // r = x * a1 + y * a2, with a1=(1,0), a2=(1/2, sqrt(3)/2)
+    // map to pixels
+    const px = (x + 0.5*y) * scale + pad;
+    const py = (Math.sqrt(3)/2 * y) * scale + pad;
+    // center within panel width
+    return [px, py];
+  }
+
+  function draw(model) {
+    resizeCanvasToDisplaySize();
+    const W = canvas.width, H = canvas.height;
+
+    ctx.clearRect(0,0,W,H);
+
+    // Two panels: left θ, right φ
+    const pad = Math.floor(Math.min(W,H) * 0.04);
+    const gap = Math.floor(pad * 0.7);
+    const panelW = Math.floor((W - 2*pad - gap) / 2);
+    const panelH = H - 2*pad;
+
+    // Background panels
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(127,127,127,0.10)";
+    ctx.fillRect(pad, pad, panelW, panelH);
+    ctx.fillRect(pad + panelW + gap, pad, panelW, panelH);
+    ctx.restore();
+
+    const N = model.N;
+
+    // scale: fit rhombus bounding box
+    // bounding width ~ (N-1) + 0.5*(N-1) = 1.5(N-1)
+    // height ~ (sqrt(3)/2)(N-1)
+    const bw = 1.5*(N-1);
+    const bh = (Math.sqrt(3)/2)*(N-1);
+    const scale = Math.min(panelW / (bw + 1.5), panelH / (bh + 1.5));
+    const dot = Math.max(1, Math.floor(scale * 0.35));
+
+    // Draw sites as dots colored by angle.
+    function drawPanel(field, x0) {
+      for (let y=0;y<N;y++) {
+        for (let x=0;x<N;x++) {
+          const i = y*N + x;
+          const a = field[i];
+          ctx.fillStyle = angleToColor(a);
+          const [px,py] = latticeToScreen(x,y,N,panelW,pad,scale);
+          const sx = x0 + px;
+          const sy = pad + py;
+          ctx.beginPath();
+          ctx.arc(sx, sy, dot, 0, TAU);
+          ctx.fill();
+        }
+      }
+    }
+
+    drawPanel(model.theta, pad);
+    drawPanel(model.phi, pad + panelW + gap);
+
+    // Panel titles
+    ctx.save();
+    ctx.fillStyle = "rgba(127,127,127,0.95)";
+    ctx.font = `${Math.floor(14 * Math.min(window.devicePixelRatio||1,2))}px system-ui, sans-serif`;
+    ctx.fillText("θ (bond-orientational angle)", pad + 10, pad + 22);
+    ctx.fillText("φ (positional phase proxy)", pad + panelW + gap + 10, pad + 22);
+    ctx.restore();
+  }
+
+  // ---------- UI Wiring ----------
+  const el = (id) => document.getElementById(id);
+  const TEl = el("T"), KtEl = el("Ktheta"), KpEl = el("Kphi"), gEl = el("g"), NEl = el("N");
+  const sweepsEl = el("sweeps"), deltaEl = el("delta");
+  const statsEl = el("stats");
+  const toggleEl = el("toggle"), randomizeEl = el("randomize"), annealEl = el("anneal");
+
+  function setValText() {
+    el("TVal").textContent = (+TEl.value).toFixed(2);
+    el("KthetaVal").textContent = (+KtEl.value).toFixed(2);
+    el("KphiVal").textContent = (+KpEl.value).toFixed(2);
+    el("gVal").textContent = (+gEl.value).toFixed(2);
+    el("NVal").textContent = (+NEl.value)|0;
+    el("sweepsVal").textContent = (+sweepsEl.value)|0;
+    el("deltaVal").textContent = (+deltaEl.value).toFixed(2);
+  }
+
+  let model = new HexaticToy((+NEl.value)|0);
+  let running = true;
+  let annealing = false;
+
+  function rebuildIfNeeded() {
+    const N = (+NEl.value)|0;
+    if (N !== model.N) {
+      model = new HexaticToy(N);
+    }
+  }
+
+  for (const input of [TEl, KtEl, KpEl, gEl, NEl, sweepsEl, deltaEl]) {
+    input.addEventListener("input", () => {
+      setValText();
+      if (input === NEl) rebuildIfNeeded();
+    });
+  }
+
+  toggleEl.addEventListener("click", () => {
+    running = !running;
+    toggleEl.textContent = running ? "Pause" : "Run";
+  });
+
+  randomizeEl.addEventListener("click", () => {
+    model.randomize();
+  });
+
+  annealEl.addEventListener("click", () => {
+    annealing = !annealing;
+    annealEl.textContent = annealing ? "Stop anneal" : "Anneal (slow cool)";
+  });
+
+  // Touch: pinch-zoom will zoom page; allow panning.
+  canvas.addEventListener("touchstart", (e) => { e.preventDefault(); }, { passive:false });
+
+  // ---------- Main loop ----------
+  let last = performance.now();
+  function tick(now) {
+    const dt = now - last; last = now;
+
+    const T = +TEl.value;
+    const Kt = +KtEl.value;
+    const Kp = +KpEl.value;
+    const g  = +gEl.value;
+    const sweeps = (+sweepsEl.value)|0;
+    const delta  = +deltaEl.value;
+
+    if (annealing) {
+      // gentle cool toward ~0.15, but user can still adjust manually
+      const target = 0.15;
+      const cur = +TEl.value;
+      const next = Math.max(target, cur - 0.0025);
+      TEl.value = next.toFixed(4);
+      el("TVal").textContent = (+TEl.value).toFixed(2);
+    }
+
+    if (running) {
+      // Do sweeps/frame
+      for (let s=0; s<sweeps; s++) model.sweep(T, Kt, Kp, g, delta);
+    }
+
+    const m = model.measures();
+    statsEl.innerHTML =
+      `<div><b>|ψ₆|</b> = ${m.psi6.toFixed(3)} &nbsp; <span class="muted">(bond-orientational order: ⟨e^{i6θ}⟩)</span></div>` +
+      `<div><b>|ψ_T|</b> = ${m.psiT.toFixed(3)} &nbsp; <span class="muted">(toy translational order: ⟨e^{iφ}⟩)</span></div>` +
+      `<div><b>ρ_v(θ)</b> ≈ ${m.rhoVT.toFixed(4)} &nbsp; <span class="muted">(vortex density from triangle winding)</span></div>` +
+      `<div><b>ρ_v(φ)</b> ≈ ${m.rhoVP.toFixed(4)} &nbsp; <span class="muted">(vortex density from triangle winding)</span></div>` +
+      `<div class="muted" style="margin-top:8px;">Two-stage intuition: as T increases, |ψ_T| often collapses before |ψ₆| when Kφ &gt; Kθ, producing a “hexatic-like” window where bond order persists but positional order is gone.</div>`;
+
+    draw(model);
+    requestAnimationFrame(tick);
+  }
+
+  setValText();
+  draw(model);
+  requestAnimationFrame(tick);
+
+  window.addEventListener("resize", () => draw(model));
+})();
+</script>
+</body>
+</html>
