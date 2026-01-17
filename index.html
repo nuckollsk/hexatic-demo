@@ -67,8 +67,8 @@
 
       <label>
         <span>Grid (N×N)</span>
-        <input id="N" type="range" min="22" max="64" step="2" value="40"/>
-        <span id="NVal">40</span>
+        <input id="N" type="range" min="22" max="64" step="2" value="32"/>
+        <span id="NVal">32</span>
       </label>
 
       <label>
@@ -85,8 +85,8 @@
 
       <label>
         <span>Delaunay rate</span>
-        <input id="triRate" type="range" min="1" max="30" step="1" value="8"/>
-        <span id="triRateVal">8</span>
+        <input id="triRate" type="range" min="1" max="30" step="1" value="14"/>
+        <span id="triRateVal">14</span>
       </label>
 
       <label>
@@ -557,51 +557,66 @@
   // Periodic Delaunay-based coordination (tiling trick)
   // ------------------------------
   function computeCoordinationPeriodic(state) {
-    const { Np, x, y, L } = state;
+    const { Np, x, y, L, a } = state;
 
-    // Build 3x3 tiled points for periodic triangulation
+    // PERFORMANCE: full 3x3 tiling creates 9*Np points (can stall mobile).
+    // Instead, replicate ONLY particles within a boundary margin so Delaunay
+    // sees periodic neighbors. This is typically sufficient for coordination.
+    const margin = 2.3 * a; // ~2 neighbor shells
+
     const pts = [];
-    const meta = []; // map tiled index -> original index
-    const shifts = [-1,0,1];
-    for (let ty of shifts) {
-      for (let tx of shifts) {
-        const sx = tx * L;
-        const sy = ty * L;
-        for (let i=0;i<Np;i++) {
-          pts.push([x[i] + sx, y[i] + sy]);
+    const meta = []; // map image-point -> original index
+
+    for (let i = 0; i < Np; i++) {
+      const xi = x[i], yi = y[i];
+
+      const sx = [0];
+      const sy = [0];
+      if (xi < margin) sx.push(+L);
+      if (xi > L - margin) sx.push(-L);
+      if (yi < margin) sy.push(+L);
+      if (yi > L - margin) sy.push(-L);
+
+      for (let dy of sy) {
+        for (let dx of sx) {
+          pts.push([xi + dx, yi + dy]);
           meta.push(i);
         }
       }
     }
 
-    const del = Delaunator.from(pts);
+    let del;
+    try {
+      del = Delaunator.from(pts);
+    } catch (e) {
+      // Rare degeneracy: return a safe placeholder rather than freezing.
+      return { deg: new Int16Array(Np).fill(6), edges: [] };
+    }
+
     const tri = del.triangles;
 
-    // Neighbor sets per original point
-    const neigh = Array.from({length: Np}, () => new Set());
+    const neigh = Array.from({ length: Np }, () => new Set());
 
-    for (let t=0; t<tri.length; t+=3) {
-      const a = tri[t], b = tri[t+1], c = tri[t+2];
-      const ia = meta[a], ib = meta[b], ic = meta[c];
+    for (let t = 0; t < tri.length; t += 3) {
+      const a0 = tri[t], b0 = tri[t + 1], c0 = tri[t + 2];
+      const ia = meta[a0], ib = meta[b0], ic = meta[c0];
       if (ia !== ib) { neigh[ia].add(ib); neigh[ib].add(ia); }
       if (ib !== ic) { neigh[ib].add(ic); neigh[ic].add(ib); }
       if (ic !== ia) { neigh[ic].add(ia); neigh[ia].add(ic); }
     }
 
     const deg = new Int16Array(Np);
-    for (let i=0;i<Np;i++) deg[i] = neigh[i].size;
+    for (let i = 0; i < Np; i++) deg[i] = neigh[i].size;
 
-    // Optional bonds for drawing: take edges between original indices within neighbor sets.
-    // Build unique list from sets (cap per node to avoid pathological growth in liquid).
     const edges = [];
     const seen = new Set();
-    for (let i=0;i<Np;i++) {
+    for (let i = 0; i < Np; i++) {
       for (const j of neigh[i]) {
-        const a = Math.min(i,j), b = Math.max(i,j);
-        const key = a + ',' + b;
+        const aa = Math.min(i, j), bb = Math.max(i, j);
+        const key = aa + ',' + bb;
         if (seen.has(key)) continue;
         seen.add(key);
-        edges.push([a,b]);
+        edges.push([aa, bb]);
       }
     }
 
@@ -726,6 +741,9 @@
     const cells = makeCells(L, rc);
 
     state = { seed, rng, Np, Nside, rho, L, a, x, y, vx, vy, fx, fy, cells };
+
+    // If the page "loads forever" on some devices, it's usually triangulation cost.
+    // These defaults favor mobile responsiveness; you can increase N or lower triRate on desktop.
     buildCellList(state);
     geom = computeCoordinationPeriodic(state);
     frame = 0;
