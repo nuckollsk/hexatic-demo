@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hexatic Toy Model (Double-BKT) on a Triangular Lattice</title>
+  <title>2D Melting Toy: Solid → Hexatic → Liquid (Triangular Lattice, Defects)</title>
   <style>
     :root { color-scheme: light dark; }
     body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
@@ -11,39 +11,40 @@
     .wrap { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 12px 14px; max-width: 1100px; margin: 0 auto; }
     @media (min-width: 980px) { .wrap { grid-template-columns: 2fr 1fr; align-items: start; } }
     .card { border: 1px solid rgba(127,127,127,.35); border-radius: 12px; padding: 12px; }
-    canvas { width: 100%; height: auto; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.08); }
-    label { display: grid; grid-template-columns: 120px 1fr 64px; gap: 10px; align-items: center; font-size: 14px; margin: 10px 0; }
+    canvas { width: 100%; height: auto; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.08); touch-action: none; }
+    label { display: grid; grid-template-columns: 140px 1fr 64px; gap: 10px; align-items: center; font-size: 14px; margin: 10px 0; }
     input[type="range"] { width: 100%; }
     button { font-size: 14px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.12); cursor: pointer; }
     button:active { transform: translateY(1px); }
     .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
-    .stats { font-variant-numeric: tabular-nums; font-size: 13px; line-height: 1.5; }
+    .stats { font-variant-numeric: tabular-nums; font-size: 13px; line-height: 1.55; }
     .muted { opacity: .8; font-size: 12px; }
     .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(127,127,127,.35); }
     .legend { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:12px; opacity:.85; }
+    .k { font-weight: 650; }
   </style>
 </head>
 <body>
   <header>
     <div style="max-width:1100px;margin:0 auto;">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;">
-        <div style="font-weight:650;">Hexatic Toy Model: Double-BKT on a Triangular Lattice (Canvas, no WebGL)</div>
-        <div class="muted">Two coupled XY fields θ (bond-orientational) and φ (positional phase proxy)</div>
+        <div style="font-weight:650;">2D Melting Toy: Solid → Hexatic → Liquid (Triangular Lattice, Defects from Delaunay coordination)</div>
+        <div class="muted">Single lattice with long-wavelength distortions + defect proliferation (5/7-coordinated sites)</div>
       </div>
     </div>
   </header>
 
   <div class="wrap">
     <div class="card">
-      <canvas id="view" width="900" height="700"></canvas>
+      <canvas id="view" width="1000" height="760"></canvas>
       <div class="legend">
-        <span class="pill">Left: θ colors (bond angle)</span>
-        <span class="pill">Right: φ colors (positional phase proxy)</span>
-        <span class="pill">Dots: lattice sites</span>
+        <span class="pill"><span class="k">6 neighbors</span> → black</span>
+        <span class="pill"><span class="k">5 neighbors</span> → red</span>
+        <span class="pill"><span class="k">7 neighbors</span> → blue</span>
+        <span class="pill">edges = Delaunay bonds (updated periodically)</span>
       </div>
       <div class="muted" style="margin-top:10px;">
-        Tip: For a clear two-stage story, choose <b>Kφ &gt; Kθ</b> and moderate coupling <b>g</b>. Then sweep T upward:
-        positional order (φ) tends to melt first, while bond order (θ) can persist (hexatic window).
+        Interpretation: At low T, almost all sites are 6-coordinated (solid-like). In an intermediate range, 5–7 pairs proliferate (dislocation-like). At higher T, isolated 5/7 defects become common (disclination-like). This is a pedagogical visualization: it uses geometry (Delaunay/Voronoi coordination) rather than a full KTHNY elastic Hamiltonian.
       </div>
     </div>
 
@@ -52,426 +53,556 @@
 
       <label>
         <span>Temperature T</span>
-        <input id="T" type="range" min="0.05" max="2.50" step="0.01" value="0.85"/>
-        <span id="TVal">0.85</span>
+        <input id="T" type="range" min="0.00" max="1.50" step="0.01" value="0.25"/>
+        <span id="TVal">0.25</span>
       </label>
 
       <label>
-        <span>Kθ (orient.)</span>
-        <input id="Ktheta" type="range" min="0.10" max="3.50" step="0.05" value="1.20"/>
-        <span id="KthetaVal">1.20</span>
+        <span>Solid→Hexatic T₁</span>
+        <input id="T1" type="range" min="0.05" max="1.20" step="0.01" value="0.55"/>
+        <span id="T1Val">0.55</span>
       </label>
 
       <label>
-        <span>Kφ (positional)</span>
-        <input id="Kphi" type="range" min="0.10" max="3.50" step="0.05" value="2.20"/>
-        <span id="KphiVal">2.20</span>
+        <span>Hexatic→Liquid T₂</span>
+        <input id="T2" type="range" min="0.10" max="1.45" step="0.01" value="0.95"/>
+        <span id="T2Val">0.95</span>
       </label>
 
       <label>
-        <span>g (6-lock)</span>
-        <input id="g" type="range" min="0.00" max="2.50" step="0.02" value="0.60"/>
-        <span id="gVal">0.60</span>
+        <span>Lattice size N</span>
+        <input id="N" type="range" min="22" max="70" step="2" value="46"/>
+        <span id="NVal">46</span>
       </label>
 
       <label>
-        <span>Lattice size</span>
-        <input id="N" type="range" min="24" max="96" step="4" value="56"/>
-        <span id="NVal">56</span>
+        <span>Bond draw</span>
+        <input id="bonds" type="range" min="0" max="1" step="1" value="1"/>
+        <span id="bondsVal">on</span>
       </label>
 
       <label>
-        <span>MC sweeps/frame</span>
-        <input id="sweeps" type="range" min="1" max="40" step="1" value="10"/>
-        <span id="sweepsVal">10</span>
+        <span>Defect boost</span>
+        <input id="boost" type="range" min="0.0" max="2.5" step="0.05" value="1.0"/>
+        <span id="boostVal">1.00</span>
       </label>
 
       <label>
-        <span>Proposal Δ</span>
-        <input id="delta" type="range" min="0.05" max="1.50" step="0.01" value="0.55"/>
-        <span id="deltaVal">0.55</span>
+        <span>Speed</span>
+        <input id="speed" type="range" min="0.2" max="2.5" step="0.05" value="1.0"/>
+        <span id="speedVal">1.00</span>
       </label>
 
       <div class="row">
         <button id="toggle">Pause</button>
-        <button id="randomize">Randomize</button>
-        <button id="anneal">Anneal (slow cool)</button>
+        <button id="reset">Reset lattice</button>
+        <button id="sweep">Auto-sweep T</button>
       </div>
 
       <div style="font-weight:650;margin:12px 0 6px;">Readouts</div>
       <div class="stats" id="stats"></div>
 
       <div class="muted" style="margin-top:10px;">
-        What this is: a <b>pedagogical</b> “double-BKT” lattice field model on a triangular lattice.
-        For full KTHNY realism (dislocations from elastic degrees of freedom), you’d promote φ to a 2-component displacement field
-        and track disclinations/dislocations geometrically; this toy captures the <b>two order parameters</b> and <b>two defect unbindings</b>
-        in a way that runs well on phones.
+        Notes:
+        <ul style="margin:6px 0 0 18px; padding:0;">
+          <li>Coordination is computed from a <b>Delaunay triangulation</b> of the instantaneous point positions (updated every few frames for performance).</li>
+          <li>Long-wavelength distortions are generated by evolving low-k Fourier modes, plus temperature-scaled jitter.</li>
+          <li>“Defect boost” increases the jitter growth near and above T₁/T₂ to make unbinding visually obvious.</li>
+        </ul>
       </div>
     </div>
   </div>
 
 <script>
 (() => {
-  // ---------- Utilities ----------
+  // ------------------ Math utils ------------------
   const TAU = Math.PI * 2;
-  function wrapPi(x) {
-    // wrap to (-pi, pi]
-    x = (x + Math.PI) % (TAU);
-    if (x < 0) x += TAU;
-    return x - Math.PI;
-  }
-  function randAngle() { return (Math.random() * TAU) - Math.PI; }
+  const clamp = (x,a,b) => Math.max(a, Math.min(b, x));
 
-  // HSV -> RGB (0..1) then to css
-  function hsvToRgb(h, s, v) {
-    h = ((h % 1) + 1) % 1;
-    const i = Math.floor(h * 6);
-    const f = h * 6 - i;
-    const p = v * (1 - s);
-    const q = v * (1 - f * s);
-    const t = v * (1 - (1 - f) * s);
-    let r, g, b;
-    switch (i % 6) {
-      case 0: r=v; g=t; b=p; break;
-      case 1: r=q; g=v; b=p; break;
-      case 2: r=p; g=v; b=t; break;
-      case 3: r=p; g=q; b=v; break;
-      case 4: r=t; g=p; b=v; break;
-      case 5: r=v; g=p; b=q; break;
-    }
-    return [r,g,b];
-  }
-  function rgbCss(r,g,b,a=1) {
-    return `rgba(${(r*255)|0},${(g*255)|0},${(b*255)|0},${a})`;
-  }
-  function angleToColor(a, sat=0.95, val=0.98) {
-    // map angle (-pi..pi] -> hue (0..1)
-    const h = (a + Math.PI) / TAU;
-    const [r,g,b] = hsvToRgb(h, sat, val);
-    return rgbCss(r,g,b,1);
+  function mulberry32(seed) {
+    // deterministic RNG for reproducible resets
+    let t = seed >>> 0;
+    return function() {
+      t += 0x6D2B79F5;
+      let r = Math.imul(t ^ (t >>> 15), 1 | t);
+      r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
   }
 
-  // ---------- Triangular lattice indexing ----------
-  // Use axial-like coords on a rhombus: (x,y), periodic boundaries.
-  // 6 neighbors in (x,y):
-  // (x+1,y), (x-1,y), (x,y+1), (x,y-1), (x+1,y-1), (x-1,y+1)
-  function idx(x,y,N) {
-    x = (x % N + N) % N;
-    y = (y % N + N) % N;
-    return y*N + x;
-  }
-  const neighD = [
-    [ 1, 0],
-    [-1, 0],
-    [ 0, 1],
-    [ 0,-1],
-    [ 1,-1],
-    [-1, 1],
-  ];
-
-  // For vortex (plaquette winding), use two elementary triangles per cell in this coordinate system:
-  // Up-triangle: (x,y), (x+1,y), (x,y+1)
-  // Down-triangle: (x+1,y), (x+1,y-1), (x,y)
-  function triangleWinding(field, N, a, b, c) {
-    const ab = wrapPi(field[b] - field[a]);
-    const bc = wrapPi(field[c] - field[b]);
-    const ca = wrapPi(field[a] - field[c]);
-    const sum = ab + bc + ca;
-    // Vortex charge approx = round(sum / 2pi)
-    return Math.round(sum / TAU);
-  }
-
-  // ---------- Model ----------
-  // Energy:
-  // E = -Kθ Σ_<ij> cos(θi - θj)  - Kφ Σ_<ij> cos(φi - φj)  - g Σ_i cos(6θi - φi)
-  // Metropolis updates at temperature T.
-  class HexaticToy {
-    constructor(N) {
-      this.N = N;
-      this.S = N*N;
-      this.theta = new Float64Array(this.S);
-      this.phi   = new Float64Array(this.S);
-      this.randomize();
-    }
-    randomize() {
-      for (let i=0;i<this.S;i++) {
-        this.theta[i] = randAngle();
-        this.phi[i]   = randAngle();
-      }
-    }
-    localEnergy(i, Kt, Kp, g) {
-      // compute energy contributions involving site i (count each neighbor once here)
-      // We'll use it for deltaE by comparing before/after; neighbor edges are symmetric but cancel in delta.
-      const N = this.N;
-      const x = i % N;
-      const y = (i / N) | 0;
-      let E = 0;
-      const ti = this.theta[i];
-      const pi = this.phi[i];
-      for (const [dx,dy] of neighD) {
-        const j = idx(x+dx, y+dy, N);
-        E += -Kt * Math.cos(ti - this.theta[j]);
-        E += -Kp * Math.cos(pi - this.phi[j]);
-      }
-      E += -g * Math.cos(6*ti - pi);
-      return E;
-    }
-    sweep(T, Kt, Kp, g, delta) {
-      // One sweep ~ S attempted updates (random sites).
-      const S = this.S;
-      for (let n=0;n<S;n++) {
-        const i = (Math.random() * S) | 0;
-
-        // Propose joint update with independent perturbations
-        const oldT = this.theta[i];
-        const oldP = this.phi[i];
-
-        const dT = (Math.random()*2 - 1) * delta;
-        const dP = (Math.random()*2 - 1) * delta;
-
-        const E0 = this.localEnergy(i, Kt, Kp, g);
-
-        this.theta[i] = wrapPi(oldT + dT);
-        this.phi[i]   = wrapPi(oldP + dP);
-
-        const E1 = this.localEnergy(i, Kt, Kp, g);
-        const dE = E1 - E0;
-
-        if (dE <= 0) continue;
-        const r = Math.random();
-        if (r >= Math.exp(-dE / T)) {
-          // reject
-          this.theta[i] = oldT;
-          this.phi[i]   = oldP;
-        }
-      }
-    }
-
-    measures() {
-      // order parameters and vortex densities
-      // psi6 = <exp(i6 theta)>, psiT = <exp(i phi)>
-      let re6=0, im6=0, reT=0, imT=0;
-      const S = this.S;
-      for (let i=0;i<S;i++) {
-        const a = 6*this.theta[i];
-        re6 += Math.cos(a); im6 += Math.sin(a);
-        const p = this.phi[i];
-        reT += Math.cos(p); imT += Math.sin(p);
-      }
-      re6/=S; im6/=S; reT/=S; imT/=S;
-      const psi6 = Math.hypot(re6, im6);
-      const psiT = Math.hypot(reT, imT);
-
-      // vortex density (count |q| on triangles / number of triangles)
-      const N = this.N;
-      let vT=0, vP=0;
-      let triCount = 0;
-
-      for (let y=0;y<N;y++) {
-        for (let x=0;x<N;x++) {
-          // Up triangle: (x,y), (x+1,y), (x,y+1)
-          const a = idx(x,y,N);
-          const b = idx(x+1,y,N);
-          const c = idx(x,y+1,N);
-          vT += Math.abs(triangleWinding(this.theta, N, a,b,c));
-          vP += Math.abs(triangleWinding(this.phi,   N, a,b,c));
-          triCount++;
-
-          // Down triangle: (x+1,y), (x+1,y-1), (x,y)
-          const d = idx(x+1,y,N);
-          const e = idx(x+1,y-1,N);
-          const f = idx(x,y,N);
-          vT += Math.abs(triangleWinding(this.theta, N, d,e,f));
-          vP += Math.abs(triangleWinding(this.phi,   N, d,e,f));
-          triCount++;
-        }
-      }
-      const rhoVT = vT / triCount;
-      const rhoVP = vP / triCount;
-
-      return { psi6, psiT, rhoVT, rhoVP };
-    }
-  }
-
-  // ---------- Rendering ----------
+  // ------------------ Canvas ------------------
   const canvas = document.getElementById('view');
   const ctx = canvas.getContext('2d', { alpha: true });
 
   function resizeCanvasToDisplaySize() {
-    // Keep internal resolution moderate for phones; scale with DPR but cap.
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(320, Math.floor(rect.width * dpr));
-    const h = Math.max(240, Math.floor(rect.height * dpr));
+    const w = Math.max(360, Math.floor(rect.width * dpr));
+    const h = Math.max(280, Math.floor(rect.height * dpr));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w; canvas.height = h;
     }
   }
 
-  function latticeToScreen(x, y, N, halfW, pad, scale) {
-    // triangular lattice embedding:
-    // r = x * a1 + y * a2, with a1=(1,0), a2=(1/2, sqrt(3)/2)
-    // map to pixels
-    const px = (x + 0.5*y) * scale + pad;
-    const py = (Math.sqrt(3)/2 * y) * scale + pad;
-    // center within panel width
-    return [px, py];
+  // ------------------ Delaunay triangulation (Bowyer–Watson) ------------------
+  // Intended for ~1k–3k points with occasional recompute.
+  // References: standard Bowyer–Watson incremental algorithm.
+
+  function circumcircle(ax, ay, bx, by, cx, cy) {
+    const d = 2 * (ax*(by-cy) + bx*(cy-ay) + cx*(ay-by));
+    if (Math.abs(d) < 1e-12) return null;
+    const ax2ay2 = ax*ax + ay*ay;
+    const bx2by2 = bx*bx + by*by;
+    const cx2cy2 = cx*cx + cy*cy;
+    const ux = (ax2ay2*(by-cy) + bx2by2*(cy-ay) + cx2cy2*(ay-by)) / d;
+    const uy = (ax2ay2*(cx-bx) + bx2by2*(ax-cx) + cx2cy2*(bx-ax)) / d;
+    const r2 = (ux-ax)*(ux-ax) + (uy-ay)*(uy-ay);
+    return { ux, uy, r2 };
   }
 
-  function draw(model) {
-    resizeCanvasToDisplaySize();
-    const W = canvas.width, H = canvas.height;
+  function inCircumcircle(px, py, tri, pts) {
+    const a = pts[tri.a], b = pts[tri.b], c = pts[tri.c];
+    const cc = tri.cc;
+    // quick reject with stored circle
+    const dx = px - cc.ux, dy = py - cc.uy;
+    return (dx*dx + dy*dy) <= cc.r2;
+  }
 
-    ctx.clearRect(0,0,W,H);
+  function makeSuperTriangle(pts) {
+    // Large triangle that contains all points
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const dx = maxX - minX;
+    const dy = maxY - minY;
+    const dmax = Math.max(dx, dy);
+    const midx = (minX + maxX) / 2;
+    const midy = (minY + maxY) / 2;
 
-    // Two panels: left θ, right φ
-    const pad = Math.floor(Math.min(W,H) * 0.04);
-    const gap = Math.floor(pad * 0.7);
-    const panelW = Math.floor((W - 2*pad - gap) / 2);
-    const panelH = H - 2*pad;
+    // Create 3 extra points far away
+    const p1 = { x: midx - 20*dmax, y: midy - dmax };
+    const p2 = { x: midx,           y: midy + 20*dmax };
+    const p3 = { x: midx + 20*dmax, y: midy - dmax };
+    const i1 = pts.length;
+    pts.push(p1, p2, p3);
+    return { i1, i2: i1+1, i3: i1+2 };
+  }
 
-    // Background panels
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = "rgba(127,127,127,0.10)";
-    ctx.fillRect(pad, pad, panelW, panelH);
-    ctx.fillRect(pad + panelW + gap, pad, panelW, panelH);
-    ctx.restore();
+  function delaunayTriangulate(pointsIn) {
+    // Copy points (we will append super triangle vertices)
+    const pts = pointsIn.map(p => ({ x: p.x, y: p.y }));
+    const st = makeSuperTriangle(pts);
 
-    const N = model.N;
+    let triangles = [];
+    {
+      const a = st.i1, b = st.i2, c = st.i3;
+      const cc = circumcircle(pts[a].x, pts[a].y, pts[b].x, pts[b].y, pts[c].x, pts[c].y);
+      triangles.push({ a, b, c, cc });
+    }
 
-    // scale: fit rhombus bounding box
-    // bounding width ~ (N-1) + 0.5*(N-1) = 1.5(N-1)
-    // height ~ (sqrt(3)/2)(N-1)
-    const bw = 1.5*(N-1);
-    const bh = (Math.sqrt(3)/2)*(N-1);
-    const scale = Math.min(panelW / (bw + 1.5), panelH / (bh + 1.5));
-    const dot = Math.max(1, Math.floor(scale * 0.35));
+    // Insert each point
+    for (let i = 0; i < pointsIn.length; i++) {
+      const px = pts[i].x, py = pts[i].y;
+      const bad = [];
+      for (let t = 0; t < triangles.length; t++) {
+        if (inCircumcircle(px, py, triangles[t], pts)) bad.push(t);
+      }
 
-    // Draw sites as dots colored by angle.
-    function drawPanel(field, x0) {
-      for (let y=0;y<N;y++) {
-        for (let x=0;x<N;x++) {
-          const i = y*N + x;
-          const a = field[i];
-          ctx.fillStyle = angleToColor(a);
-          const [px,py] = latticeToScreen(x,y,N,panelW,pad,scale);
-          const sx = x0 + px;
-          const sy = pad + py;
-          ctx.beginPath();
-          ctx.arc(sx, sy, dot, 0, TAU);
-          ctx.fill();
-        }
+      // Boundary edges of polygonal hole: edges that appear once
+      const edgeCount = new Map();
+      function addEdge(u,v) {
+        const a = Math.min(u,v), b = Math.max(u,v);
+        const key = a + "," + b;
+        edgeCount.set(key, (edgeCount.get(key) || 0) + 1);
+      }
+
+      for (const ti of bad) {
+        const tri = triangles[ti];
+        addEdge(tri.a, tri.b);
+        addEdge(tri.b, tri.c);
+        addEdge(tri.c, tri.a);
+      }
+
+      // Remove bad triangles (from end to keep indices valid)
+      bad.sort((x,y)=>y-x);
+      for (const ti of bad) triangles.splice(ti, 1);
+
+      // Re-triangulate the hole
+      for (const [key, count] of edgeCount.entries()) {
+        if (count !== 1) continue; // internal edge
+        const [uStr, vStr] = key.split(',');
+        const u = +uStr, v = +vStr;
+        const a = u, b = v, c = i;
+        const cc = circumcircle(pts[a].x, pts[a].y, pts[b].x, pts[b].y, pts[c].x, pts[c].y);
+        if (!cc) continue;
+        triangles.push({ a, b, c, cc });
       }
     }
 
-    drawPanel(model.theta, pad);
-    drawPanel(model.phi, pad + panelW + gap);
+    // Filter triangles that include any super triangle vertex
+    const n = pointsIn.length;
+    triangles = triangles.filter(tri => tri.a < n && tri.b < n && tri.c < n);
 
-    // Panel titles
+    // Build unique undirected edge list
+    const edges = new Map();
+    function addEdge(u,v) {
+      const a = Math.min(u,v), b = Math.max(u,v);
+      const key = a + "," + b;
+      edges.set(key, [a,b]);
+    }
+    for (const tri of triangles) {
+      addEdge(tri.a, tri.b);
+      addEdge(tri.b, tri.c);
+      addEdge(tri.c, tri.a);
+    }
+
+    // Degree/coordination
+    const deg = new Int16Array(n);
+    for (const [_, e] of edges) {
+      deg[e[0]]++;
+      deg[e[1]]++;
+    }
+
+    return { triangles, edges: Array.from(edges.values()), deg };
+  }
+
+  // ------------------ Lattice + distortion model ------------------
+  // Start from perfect triangular lattice in a box. Distort via low-k modes + jitter.
+
+  function buildTriangularLattice(N, W, H, pad) {
+    // Create roughly N x N points; map triangular basis into centered region.
+    // basis a1=(1,0), a2=(1/2, sqrt(3)/2)
+    const pts = [];
+    const bw = 1.5*(N-1);
+    const bh = (Math.sqrt(3)/2)*(N-1);
+    const scale = Math.min((W-2*pad)/ (bw + 1.2), (H-2*pad)/ (bh + 1.2));
+
+    const ox = pad + (W-2*pad - bw*scale)/2;
+    const oy = pad + (H-2*pad - bh*scale)/2;
+
+    for (let y=0;y<N;y++) {
+      for (let x=0;x<N;x++) {
+        const px = (x + 0.5*y) * scale + ox;
+        const py = (Math.sqrt(3)/2 * y) * scale + oy;
+        pts.push({ x0: px, y0: py, x: px, y: py });
+      }
+    }
+    return { pts, scale };
+  }
+
+  function gaussian(rng) {
+    // Box-Muller
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2*Math.log(u)) * Math.cos(TAU*v);
+  }
+
+  function smoothStep(x) {
+    x = clamp(x, 0, 1);
+    return x*x*(3 - 2*x);
+  }
+
+  // Low-k mode field: u(x,y,t) = sum_m A_m * sin(k·r + phase_m(t))
+  function makeModes(rng, count=6) {
+    const modes = [];
+    for (let i=0;i<count;i++) {
+      // small integer wavevectors
+      const kx = (rng() < 0.5 ? 1 : 2) * (rng()<0.5 ? -1 : 1);
+      const ky = (rng() < 0.5 ? 1 : 2) * (rng()<0.5 ? -1 : 1);
+      modes.push({
+        kx, ky,
+        phx: rng()*TAU,
+        phy: rng()*TAU,
+        wx: (0.15 + 0.25*rng()),
+        wy: (0.15 + 0.25*rng()),
+        ax: 0.5 + 0.8*rng(),
+        ay: 0.5 + 0.8*rng()
+      });
+    }
+    return modes;
+  }
+
+  function applyDistortions(state, params, dt) {
+    const { pts, scale, modes } = state;
+    const { T, T1, T2, boost, speed, rng } = params;
+
+    // Piecewise amplitude schedule to mimic two-step melting.
+    // 1) Low T: tiny jitter + gentle long-wave phonons
+    // 2) Near/above T1: increased shear/jitter -> dislocation-like pairs appear in triangulation
+    // 3) Near/above T2: stronger randomization -> disclination-like isolated 5/7 become common
+
+    const s1 = smoothStep((T - (T1 - 0.18)) / 0.25); // rises around T1
+    const s2 = smoothStep((T - (T2 - 0.18)) / 0.25); // rises around T2
+
+    const phononAmp = (0.35 + 0.9*s1 + 1.4*s2) * boost * 0.55; // in pixels, scaled below
+    const jitterAmp = (0.08 + 0.55*s1 + 1.25*s2) * boost;     // in pixels, scaled below
+
+    // Update phases
+    for (const m of modes) {
+      m.phx += m.wx * dt * speed;
+      m.phy += m.wy * dt * speed;
+    }
+
+    // Distortion scale relative to lattice spacing
+    const a = scale; // approx nearest neighbor distance
+    const A = phononAmp * 0.25 * a;
+    const J = jitterAmp * 0.08 * a;
+
+    // Apply to each point
+    // Use normalized coordinates for k·r so modes stay long-wavelength across sizes.
+    // Compute bounding box once
+    let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+    for (const p of pts) {
+      if (p.x0 < minX) minX = p.x0;
+      if (p.y0 < minY) minY = p.y0;
+      if (p.x0 > maxX) maxX = p.x0;
+      if (p.y0 > maxY) maxY = p.y0;
+    }
+    const invW = 1 / Math.max(1, (maxX - minX));
+    const invH = 1 / Math.max(1, (maxY - minY));
+
+    for (let i=0;i<pts.length;i++) {
+      const p = pts[i];
+      const X = (p.x0 - minX) * invW;
+      const Y = (p.y0 - minY) * invH;
+
+      let ux = 0, uy = 0;
+      for (const m of modes) {
+        const phase = TAU*(m.kx*X + m.ky*Y);
+        ux += m.ax * Math.sin(phase + m.phx);
+        uy += m.ay * Math.sin(phase + m.phy);
+      }
+
+      // Temperature-scaled jitter (Gaussian)
+      // Add slight temporal correlation by low-pass filtering through current position
+      const jx = gaussian(rng) * J;
+      const jy = gaussian(rng) * J;
+
+      const tx = p.x0 + A*ux + jx;
+      const ty = p.y0 + A*uy + jy;
+
+      // Relax toward target position to create smooth motion
+      const relax = 0.18 + 0.10*s1 + 0.10*s2;
+      p.x += (tx - p.x) * relax;
+      p.y += (ty - p.y) * relax;
+    }
+  }
+
+  // ------------------ Rendering ------------------
+  function draw(state, geom, ui) {
+    resizeCanvasToDisplaySize();
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+
+    const { pts } = state;
+    const { edges, deg } = geom;
+
+    // Dot size tuned to spacing
+    // Estimate using nearest-neighbor spacing from lattice scale
+    const dot = Math.max(1.2, Math.min(4.0, state.scale * 0.18));
+
+    // Bonds
+    if (ui.drawBonds) {
+      ctx.save();
+      ctx.globalAlpha = 0.28;
+      ctx.lineWidth = Math.max(1, state.scale * 0.04);
+      ctx.strokeStyle = "rgba(140,140,140,0.7)";
+      ctx.beginPath();
+      for (const [a,b] of edges) {
+        const pa = pts[a], pb = pts[b];
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Points colored by coordination
+    // 6 -> black, 5 -> red, 7 -> blue, others -> gray
     ctx.save();
-    ctx.fillStyle = "rgba(127,127,127,0.95)";
+    for (let i=0;i<pts.length;i++) {
+      const d = deg[i];
+      let fill;
+      if (d === 6) fill = "rgba(0,0,0,0.95)";
+      else if (d === 5) fill = "rgba(220,40,40,0.95)";
+      else if (d === 7) fill = "rgba(60,120,255,0.95)";
+      else fill = "rgba(180,180,180,0.9)";
+      const p = pts[i];
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, dot, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Title overlay for phase regime
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "rgba(180,180,180,0.92)";
     ctx.font = `${Math.floor(14 * Math.min(window.devicePixelRatio||1,2))}px system-ui, sans-serif`;
-    ctx.fillText("θ (bond-orientational angle)", pad + 10, pad + 22);
-    ctx.fillText("φ (positional phase proxy)", pad + panelW + gap + 10, pad + 22);
+    ctx.fillText(ui.phaseLabel, 14, 26);
     ctx.restore();
   }
 
-  // ---------- UI Wiring ----------
+  function summarize(deg) {
+    let n5=0, n6=0, n7=0, no=0;
+    for (let i=0;i<deg.length;i++) {
+      if (deg[i] === 5) n5++;
+      else if (deg[i] === 6) n6++;
+      else if (deg[i] === 7) n7++;
+      else no++;
+    }
+    const N = deg.length;
+    return { n5, n6, n7, no, f5: n5/N, f6: n6/N, f7: n7/N, fo: no/N };
+  }
+
+  // ------------------ UI wiring ------------------
   const el = (id) => document.getElementById(id);
-  const TEl = el("T"), KtEl = el("Ktheta"), KpEl = el("Kphi"), gEl = el("g"), NEl = el("N");
-  const sweepsEl = el("sweeps"), deltaEl = el("delta");
-  const statsEl = el("stats");
-  const toggleEl = el("toggle"), randomizeEl = el("randomize"), annealEl = el("anneal");
+  const TEl = el('T'), T1El = el('T1'), T2El = el('T2'), NEl = el('N');
+  const bondsEl = el('bonds'), boostEl = el('boost'), speedEl = el('speed');
+  const statsEl = el('stats');
+  const toggleEl = el('toggle'), resetEl = el('reset'), sweepEl = el('sweep');
 
   function setValText() {
-    el("TVal").textContent = (+TEl.value).toFixed(2);
-    el("KthetaVal").textContent = (+KtEl.value).toFixed(2);
-    el("KphiVal").textContent = (+KpEl.value).toFixed(2);
-    el("gVal").textContent = (+gEl.value).toFixed(2);
-    el("NVal").textContent = (+NEl.value)|0;
-    el("sweepsVal").textContent = (+sweepsEl.value)|0;
-    el("deltaVal").textContent = (+deltaEl.value).toFixed(2);
+    el('TVal').textContent  = (+TEl.value).toFixed(2);
+    el('T1Val').textContent = (+T1El.value).toFixed(2);
+    el('T2Val').textContent = (+T2El.value).toFixed(2);
+    el('NVal').textContent  = (+NEl.value)|0;
+    el('bondsVal').textContent = (+bondsEl.value) ? 'on' : 'off';
+    el('boostVal').textContent = (+boostEl.value).toFixed(2);
+    el('speedVal').textContent = (+speedEl.value).toFixed(2);
   }
 
-  let model = new HexaticToy((+NEl.value)|0);
-  let running = true;
-  let annealing = false;
-
-  function rebuildIfNeeded() {
-    const N = (+NEl.value)|0;
-    if (N !== model.N) {
-      model = new HexaticToy(N);
-    }
-  }
-
-  for (const input of [TEl, KtEl, KpEl, gEl, NEl, sweepsEl, deltaEl]) {
-    input.addEventListener("input", () => {
+  for (const input of [TEl, T1El, T2El, NEl, bondsEl, boostEl, speedEl]) {
+    input.addEventListener('input', () => {
       setValText();
-      if (input === NEl) rebuildIfNeeded();
+      if (input === NEl) rebuild();
     });
   }
 
-  toggleEl.addEventListener("click", () => {
+  let running = true;
+  toggleEl.addEventListener('click', () => {
     running = !running;
-    toggleEl.textContent = running ? "Pause" : "Run";
+    toggleEl.textContent = running ? 'Pause' : 'Run';
   });
 
-  randomizeEl.addEventListener("click", () => {
-    model.randomize();
+  let autoSweep = false;
+  sweepEl.addEventListener('click', () => {
+    autoSweep = !autoSweep;
+    sweepEl.textContent = autoSweep ? 'Stop sweep' : 'Auto-sweep T';
   });
 
-  annealEl.addEventListener("click", () => {
-    annealing = !annealing;
-    annealEl.textContent = annealing ? "Stop anneal" : "Anneal (slow cool)";
-  });
+  resetEl.addEventListener('click', () => rebuild(true));
 
-  // Touch: pinch-zoom will zoom page; allow panning.
-  canvas.addEventListener("touchstart", (e) => { e.preventDefault(); }, { passive:false });
-
-  // ---------- Main loop ----------
+  // ------------------ State ------------------
+  let state = null;
+  let geom = null;
+  let frame = 0;
   let last = performance.now();
+
+  function phaseLabel(T, T1, T2) {
+    if (T < T1) return `Regime: solid-like (T < T₁)`;
+    if (T < T2) return `Regime: hexatic-like (T₁ ≤ T < T₂)`;
+    return `Regime: liquid-like (T ≥ T₂)`;
+  }
+
+  function rebuild(newSeed=false) {
+    resizeCanvasToDisplaySize();
+    const W = canvas.width, H = canvas.height;
+    const pad = Math.floor(Math.min(W,H) * 0.06);
+    const N = (+NEl.value)|0;
+
+    const seed = newSeed ? (Math.random()*1e9)|0 : (state?.seed ?? ((Math.random()*1e9)|0));
+    const rng = mulberry32(seed);
+
+    const built = buildTriangularLattice(N, W, H, pad);
+    state = {
+      seed,
+      rng,
+      pts: built.pts,
+      scale: built.scale,
+      modes: makeModes(rng, 7),
+    };
+
+    // initial geom
+    geom = delaunayTriangulate(state.pts);
+    frame = 0;
+  }
+
+  // Initial build
+  setValText();
+  rebuild(true);
+
+  // ------------------ Main loop ------------------
   function tick(now) {
-    const dt = now - last; last = now;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
 
-    const T = +TEl.value;
-    const Kt = +KtEl.value;
-    const Kp = +KpEl.value;
-    const g  = +gEl.value;
-    const sweeps = (+sweepsEl.value)|0;
-    const delta  = +deltaEl.value;
+    const T  = +TEl.value;
+    const T1 = +T1El.value;
+    const T2 = +T2El.value;
 
-    if (annealing) {
-      // gentle cool toward ~0.15, but user can still adjust manually
-      const target = 0.15;
-      const cur = +TEl.value;
-      const next = Math.max(target, cur - 0.0025);
-      TEl.value = next.toFixed(4);
-      el("TVal").textContent = (+TEl.value).toFixed(2);
+    // Keep ordering T1 < T2 visually sane
+    if (T2 <= T1 + 0.05) {
+      T2El.value = (T1 + 0.05).toFixed(2);
+      el('T2Val').textContent = (+T2El.value).toFixed(2);
+    }
+
+    if (autoSweep) {
+      // Sweep up and wrap
+      const next = T + 0.006;
+      const maxT = +TEl.max;
+      TEl.value = (next > maxT ? 0.00 : next).toFixed(2);
+      el('TVal').textContent = (+TEl.value).toFixed(2);
     }
 
     if (running) {
-      // Do sweeps/frame
-      for (let s=0; s<sweeps; s++) model.sweep(T, Kt, Kp, g, delta);
+      applyDistortions(state, {
+        T: +TEl.value,
+        T1: +T1El.value,
+        T2: +T2El.value,
+        boost: +boostEl.value,
+        speed: +speedEl.value,
+        rng: state.rng
+      }, dt);
     }
 
-    const m = model.measures();
-    statsEl.innerHTML =
-      `<div><b>|ψ₆|</b> = ${m.psi6.toFixed(3)} &nbsp; <span class="muted">(bond-orientational order: ⟨e^{i6θ}⟩)</span></div>` +
-      `<div><b>|ψ_T|</b> = ${m.psiT.toFixed(3)} &nbsp; <span class="muted">(toy translational order: ⟨e^{iφ}⟩)</span></div>` +
-      `<div><b>ρ_v(θ)</b> ≈ ${m.rhoVT.toFixed(4)} &nbsp; <span class="muted">(vortex density from triangle winding)</span></div>` +
-      `<div><b>ρ_v(φ)</b> ≈ ${m.rhoVP.toFixed(4)} &nbsp; <span class="muted">(vortex density from triangle winding)</span></div>` +
-      `<div class="muted" style="margin-top:8px;">Two-stage intuition: as T increases, |ψ_T| often collapses before |ψ₆| when Kφ &gt; Kθ, producing a “hexatic-like” window where bond order persists but positional order is gone.</div>`;
+    // Recompute triangulation periodically (performance tradeoff)
+    // Increase frequency at higher temperature (more rapid changes)
+    const hot = smoothStep((+TEl.value - (+T1El.value - 0.1)) / 0.4);
+    const recomputeEvery = Math.max(2, Math.floor(10 - 7*hot));
 
-    draw(model);
+    if (frame % recomputeEvery === 0) {
+      geom = delaunayTriangulate(state.pts);
+    }
+
+    const sum = summarize(geom.deg);
+    const label = phaseLabel(+TEl.value, +T1El.value, +T2El.value);
+
+    statsEl.innerHTML =
+      `<div><b>Coordination fractions</b></div>` +
+      `<div>f(6) = ${(100*sum.f6).toFixed(1)}% &nbsp; <span class="muted">(black)</span></div>` +
+      `<div>f(5) = ${(100*sum.f5).toFixed(2)}% &nbsp; <span class="muted">(red)</span></div>` +
+      `<div>f(7) = ${(100*sum.f7).toFixed(2)}% &nbsp; <span class="muted">(blue)</span></div>` +
+      `<div>f(other) = ${(100*sum.fo).toFixed(2)}% &nbsp; <span class="muted">(gray; mostly boundaries / rare local degeneracy)</span></div>` +
+      `<div class="muted" style="margin-top:8px;">Heuristic defect signals: dislocation-like activity ~ growth of paired (5,7); disclination-like activity ~ large increase in unpaired 5/7 as T approaches/exceeds T₂.</div>`;
+
+    draw(state, geom, {
+      drawBonds: (+bondsEl.value) === 1,
+      phaseLabel: `${label}   |   T=${(+TEl.value).toFixed(2)}  (T₁=${(+T1El.value).toFixed(2)}, T₂=${(+T2El.value).toFixed(2)})`
+    });
+
+    frame++;
     requestAnimationFrame(tick);
   }
 
-  setValText();
-  draw(model);
   requestAnimationFrame(tick);
-
-  window.addEventListener("resize", () => draw(model));
+  window.addEventListener('resize', () => rebuild(false));
 })();
 </script>
 </body>
